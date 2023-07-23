@@ -1,0 +1,128 @@
+-- SELECT *
+-- FROM `portfolioproject-393608.coviddata.coviddeaths` 
+-- ORDER BY 3,4
+
+-- SELECT *
+-- FROM `portfolioproject-393608.coviddata.covidvaccinations`
+-- ORDER BY 3,4
+
+---selecting required data only
+SELECT location, date, total_cases, new_cases, total_deaths, population
+FROM `portfolioproject-393608.coviddata.coviddeaths`
+ORDER BY 1,2
+
+--total cases vs total deaths in India
+select location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 as death_percent
+from `portfolioproject-393608.coviddata.coviddeaths`
+where location = 'India'
+
+--total cases vs population
+--find percentage of infected population
+select location, date, population, total_cases, (total_cases/population)*100 as affected_population_percent
+from `portfolioproject-393608.coviddata.coviddeaths`
+--where location = 'India'
+order by 1,2
+
+--countries with highest infection rate compared to population
+select location, population, max(total_cases) as highest_infection_count, max((total_cases/population))*100 as affected_population_percent
+from `portfolioproject-393608.coviddata.coviddeaths`
+group by location, population
+order by affected_population_percent desc
+
+--countries with highest death count per population
+select location, max(cast(total_deaths as int)) as highest_death_count
+from `portfolioproject-393608.coviddata.coviddeaths`
+where continent is not null
+group by location
+order by highest_death_count desc
+
+--countries with highest death count per population by continent
+select continent, max(cast(total_deaths as int)) as highest_death_count
+from `portfolioproject-393608.coviddata.coviddeaths`
+where continent is not null
+group by continent
+order by highest_death_count desc
+
+--global numbers ie, total cases, deaths and death percentage in each day
+select date, sum(new_cases) as total_cases, sum(cast(new_deaths as int)) as total_deaths, sum(cast(new_deaths as int))/sum(new_cases)*100 as death_percentage
+from `portfolioproject-393608.coviddata.coviddeaths`
+where continent is not null
+group by date
+order by 1,2
+
+--global numbers ie, total cases, deaths and death percentage till date
+select sum(new_cases) as total_cases, sum(cast(new_deaths as int)) as total_deaths, sum(cast(new_deaths as int))/sum(new_cases)*100 as death_percentage
+from `portfolioproject-393608.coviddata.coviddeaths`
+where continent is not null
+--group by date
+--order by 1,2
+
+--total population vs vaccinations (using join, partition by to add up new vac )
+select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+sum(cast(vac.new_vaccinations as int))over (partition by dea.location order by dea.location, dea.date
+) as rollinfpeoplevaccinated
+from `portfolioproject-393608.coviddata.coviddeaths` as dea
+  join `portfolioproject-393608.coviddata.covidvaccinations` vac
+  on dea.location = vac.location
+  and dea.date = vac.date
+where dea.continent is not null
+order by 2,3
+
+--use CTE
+with popvsvac 
+as 
+(
+  select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+  sum(cast(vac.new_vaccinations as int))over (partition by dea.location order by dea.location, dea.date
+  ) as RollingPeopleVaccinated
+  from `portfolioproject-393608.coviddata.coviddeaths` as dea
+    join `portfolioproject-393608.coviddata.covidvaccinations` vac
+    on dea.location = vac.location
+    and dea.date = vac.date
+  where dea.continent is not null
+  --order by 2,3
+)
+select *, (RollingPeopleVaccinated/Population)*100 
+from popvsvac
+
+--using temp tables
+-- drop table if exists populationvsvaccinated;
+
+-- create or replace table populationvsvaccinated
+-- (
+-- continent nvarchar(255),
+-- location nvarchar(255),
+-- date datetime,
+-- population int,
+-- new_vaccinations int,
+-- rollingpeoplevaccinated int
+-- )
+
+-- insert into populationvsvaccinated
+-- select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+--   ,sum(cast(vac.new_vaccinations as int))over (partition by dea.location order by dea.location, dea.date) 
+--   as RollingPeopleVaccinated
+-- from `portfolioproject-393608.coviddata.coviddeaths` as dea
+--   join `portfolioproject-393608.coviddata.covidvaccinations` vac
+--   on dea.location = vac.location
+--   and dea.date = vac.date
+-- where dea.continent is not null
+-- --order by 2,3
+
+-- select *, (RollingPeopleVaccinated/Population)*100 
+-- from populationvsvaccinated
+
+--creating view to store results
+create view `portfolioproject-393608.coviddata.populationvsvaccinvated` as
+select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+  sum(cast(vac.new_vaccinations as int))over (partition by dea.location order by dea.location, dea.date
+  ) as RollingPeopleVaccinated
+  from `portfolioproject-393608.coviddata.coviddeaths` as dea
+    join `portfolioproject-393608.coviddata.covidvaccinations` vac
+    on dea.location = vac.location
+    and dea.date = vac.date
+where dea.continent is not null
+--order by 2,3
+
+select *
+from `portfolioproject-393608.coviddata.populationvsvaccinvated`
